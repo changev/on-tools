@@ -49,7 +49,7 @@ class Manifest(object):
     def set_git_credentials(self, git_credentials):
         self._git_credentials = git_credentials
         self.setup_gitbit()
-
+    
     @property
     def downstream_jobs(self):
         return self._downstream_jobs
