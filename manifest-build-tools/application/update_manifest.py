@@ -2,6 +2,29 @@
 
 # Copyright 2015, EMC, Inc.
 
+"""
+Usage:
+./on-tools/manifest-build-tools/HWIMO-BUILD on-tools/manifest-build-tools/application/update_manifest.py \
+--repo "$url" \
+--branch "$branch" \
+--commit "$id" \
+--manifest_repo https://github.com/PengTian0/build-manifests \
+--updated_manifest upstream_manifest_name \
+--git-credential https://github.com,GITHUB_CREDS \
+--manifest-file rackhd-devel
+
+The required parameters:
+repo: Git url to match for updating the commit-id
+branch: The target branch for the named repo
+commit: The commit id to target an exact version
+manifest_repo: The manifest repository URL.
+updated_manifest: File containing the name of the updated manifest, the repository url, branch, commit of manifest repository.
+git_credential: url, credentials pair for the access to github repos
+
+The optional parameters:
+manifest_file: The target manifest file to update. Searches through all manifest files if left it empty
+dryrun: Do not commit any changes, just print what would be done
+"""
 
 import argparse
 import datetime
