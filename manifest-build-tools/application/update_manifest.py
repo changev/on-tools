@@ -241,11 +241,11 @@ class UpdateManifest(object):
                 try:
                     manifest = Manifest(path_name, self.__git_credentials)
                     manifest.update_manifest(self.__repo, self.__branch, self.__commit)
-                    if manifest.get_changed():
+                    if manifest.changed:
                         manifest.write_manifest_file(dir_name, commit_message, path_name, self.__dryrun)
                         return path_name, manifest
                     else:
-                        print "No changes to {0}".format(manifest.get_name())
+                        print "No changes to {0}".format(manifest.name)
                 except KeyError as error:
                     self.cleanup_and_exit("Failed to create an Manifest instance for the manifest file {0}\nError:{1}"\
                          .format(self.__manifest_file, error.message),1)
@@ -259,11 +259,11 @@ class UpdateManifest(object):
                     try:
                         manifest = Manifest(path_name, self.__git_credentials)
                         manifest.update_manifest(self.__repo, self.__branch, self.__commit)
-                        if manifest.get_changed():
+                        if manifest.changed:
                             manifest.write_manifest_file(dir_name, commit_message, path_name, self.__dryrun)
                             return path_name, manifest
                         else:
-                            print "No changes to {0}".format(manifest.get_name())
+                            print "No changes to {0}".format(manifest.name)
                     except KeyError as error:
                         self.cleanup_and_exit("Failed to create an Manifest instance for the manifest file {0}\nError:{1}"\
                             .format(path_name, error.message),1)
@@ -305,7 +305,7 @@ class UpdateManifest(object):
         file_name = file_with_path.split('/')[-1]
         downstream_parameters = {}
         downstream_parameters['MANIFEST_FILE_NAME'] = file_name
-        downstream_parameters['BUILD_REQUIREMENTS'] = manifest.get_build_requirements()
+        downstream_parameters['BUILD_REQUIREMENTS'] = manifest.build_requirements
         downstream_parameters['MANIFEST_FILE_REPO'] = self.__manifest_repository_url
         try:
             downstream_parameters['MANIFEST_FILE_BRANCH'] = self.repo_operator.get_current_branch(manifest_folder)
