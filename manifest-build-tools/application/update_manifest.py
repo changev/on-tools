@@ -18,10 +18,10 @@ repo: Git url to match for updating the commit-id
 branch: The target branch for the named repo
 commit: The commit id to target an exact version
 manifest_repo: The manifest repository URL.
-updated_manifest: The output File containing the name of the updated manifest, the repository url, branch, commit of manifest repository. The key, value pairs in the file will be passed to downstream jobs.
 git_credential: url, credentials pair for the access to github repos
 
 The optional parameters:
+updated_manifest: The output File containing the name of the updated manifest, the repository url, branch, commit of manifest repository. The key, value pairs in the file will be passed to downstream jobs.
 manifest_file: The target manifest file to be updated. Searches through all manifest files if left it empty.
 dryrun: Do not commit any changes, just print what would be done
 """
@@ -101,7 +101,7 @@ class UpdateManifest(object):
                             help="Git URL and credentials comma separated",
                             action="append")
         parser.add_argument('--updated_manifest',
-                            help="Output file containing the name of the updated manifest, he repository url, branch, commit of manifest repository. The key, value pairs will be passed to downstream jobs as parameters",
+                            help="Output file containing the name of the updated manifest, the repository url, branch, commit of manifest repository. The key, value pairs will be passed to downstream jobs as parameters",
                             action="store")
         parser = parser.parse_args(args)
 
