@@ -8,21 +8,19 @@ Usage:
 --repo "$url" \
 --branch "$branch" \
 --commit "$id" \
---manifest_repo https://github.com/PengTian0/build-manifests \
---updated_manifest upstream_manifest_name \
+--manifest_download_url https://dl.bintray.com/rackhd-mirror/binary/manifest/ \
 --git-credential https://github.com,GITHUB_CREDS \
---manifest-file rackhd-devel
+--manifest-file 1.2.3.file
 
 The required parameters:
 repo: Git url to match for updating the commit-id
 branch: The target branch for the named repo
 commit: The commit id to target an exact version
-manifest_repo: The manifest repository URL.
+manifest_download_url: The manifest base download URL.
 git_credential: url, credentials pair for the access to github repos
+manifest_file:The target manifest file to be updated
 
 The optional parameters:
-updated_manifest: The output File containing the name of the updated manifest, the repository url, branch, commit of manifest repository. The key, value pairs in the file will be passed to downstream jobs.
-manifest_file: The target manifest file to be updated. Searches through all manifest files if left it empty.
 dryrun: Do not commit any changes, just print what would be done
 """
 
@@ -35,6 +33,7 @@ import subprocess
 import sys
 import tempfile
 import shutil
+import requests
 
 #pylint: disable=relative-import
 import config
@@ -50,7 +49,7 @@ class UpdateManifest(object):
         __branch - the branch name associated with __repo
         __sliced_branch - the branch name sliced at any forward slashes
         __commit - The commit id associated with the __repo and __branch that we want to update
-        __manifest_repository_url - the repository url the points to the collection of manifest files
+        __manifest_base_url - the base download url points to the collection of manifest files
         __manifest_file - the desired manifest file to update which resides in __manifest_repository_url
         __cleanup_directories - the path/name of directories created are appended here for cleanup in task_cleanup
         __git_credentials - url, credentials pair for the access to github repos
@@ -62,7 +61,7 @@ class UpdateManifest(object):
         self.__branch = None
         self.__sliced_branch = None
         self.__commit = None
-        self.__manifest_repository_url = None
+        self.__manifest_download_url = None
         self.__manifest_file = None
         self.__cleanup_directories = []
         self.__git_credentials = None
@@ -88,8 +87,8 @@ class UpdateManifest(object):
         parser.add_argument("--branch",
                             help="The target branch for the named repo",
                             action="store")
-        parser.add_argument("--manifest_repo",
-                            help="The manifest repository URL.",
+        parser.add_argument("--manifest_download_url",
+                            help="The manifest derectory URL in bintray.",
                             action="store")
         parser.add_argument("--commit",
                             help="OPTIONAL: The commit id to target an exact version",
@@ -101,7 +100,7 @@ class UpdateManifest(object):
                             help="Git URL and credentials comma separated",
                             action="append")
         parser.add_argument('--updated_manifest',
-                            help="Output file containing the name of the updated manifest, the repository url, branch, commit of manifest repository. The key, value pairs will be passed to downstream jobs as parameters",
+                            help="Output file containing the name of the updated manifest, the download url, branch, commit of manifest repository. The key, value pairs will be passed to downstream jobs as parameters",
                             action="store")
         parser = parser.parse_args(args)
 
@@ -128,10 +127,15 @@ class UpdateManifest(object):
         else:
             print "\nMust specify a branch name (--branch <branch_name>)\n"
 
-        if args.manifest_repo:
-            self.__manifest_repository_url = args.manifest_repo
+        # if args.manifest_repo:
+        #     self.__manifest_repository_url = args.manifest_repo
+        # else:
+        #     print "\n Must specify a full repository url for retrieving <manifest>.json files\n"
+        
+        if args.manifest_download_url:
+            self.__manifest_download_url = args.manifest_download_url
         else:
-            print "\n Must specify a full repository url for retrieving <manifest>.json files\n"
+            print "\n Must specify a manifest base url for download <manifest>.json files\n"
 
         if args.dryrun:
             self.__dryrun = True
@@ -173,23 +177,33 @@ class UpdateManifest(object):
         if not commit_match:
             self.cleanup_and_exit("Id, '{0}' is not valid. It must be a 40 character hex string.".format(self.__commit), 1)
 
-
-    def clone_manifest_repo(self):
-
+    def download_manifest_file(self):
         """
-        Clone the repository which holds the manifest json files. Return that directory name. The directory
+        Download the manifest json files. Return that directory name which stores manifest. The directory
         is temporary and deleted in the cleanup_and_exit function
-        :return: A string containing the name of the folder where the manifest repo was cloned
+        :return: A string containing the name of the folder where the manifest file was download.
         """
         directory_name = tempfile.mkdtemp()
 
         if os.path.isdir(directory_name):
-            self.__cleanup_directories.append(directory_name)
+            pass
+            # For now script of 'upload to bintray' is seperated from this script.
+            # So before uploading this directory shouldn't be deleted'
+            # The blow code snippet will be unfolded when involved bintray upload functions into this script.
+            # self.__cleanup_directories.append(directory_name)
         else:
             self.cleanup_and_exit("Failed to make temporary directory for the repository: {0}".format(url), 1)
         try:
-            manifest_repo = self.repo_operator.clone_repo(self.__manifest_repository_url, directory_name)
-            return manifest_repo
+            url = "/".join([self.__manifest_download_url, self.__manifest_file])
+            dest_dir = "/".join([directory_name, self.__manifest_file])
+            resp = requests.get(url)
+            if resp.ok:
+                with open(dest_dir, "wb") as file_handle:
+                    file_handle.write(resp.content)
+            else:
+                # If there's no manifest file in bintray server, init an empty one
+                Manifest.instance_of_sample().dump_to_json_file(dest_dir)
+            return directory_name
         except RuntimeError as error:
             self.cleanup_and_exit(error, 1)
 
@@ -246,6 +260,13 @@ class UpdateManifest(object):
         except RuntimeError as error:
             self.cleanup_and_exit(error, 1)
 
+    def upload_manifest_to_bintray(self, dir_name, bintray):
+        """
+        Update manifest to bintray based on its contents and user arguments.
+        :param dir_name: The directory of the repository
+        :return: if repo is updated, return updated manifest file path and the manifest object
+                 otherwise, return None, None
+        """
 
     def update_manifest_repo(self, dir_name, repo_commit_message):
         """
@@ -254,10 +275,7 @@ class UpdateManifest(object):
         :return: if repo is updated, return updated manifest file path and the manifest object
                  otherwise, return None, None
         """
-        url_short_name = self.__repo.split('/')[-1][:-4]
-        commit_message = "update to {0} */{1} commit #{2}\n{3}"\
-                         .format(url_short_name, self.__branch, self.__commit, repo_commit_message)
-        
+
         if self.__manifest_file is not None:
             path_name = os.path.join(dir_name, self.__manifest_file)
             if os.path.isfile(path_name):
@@ -265,7 +283,7 @@ class UpdateManifest(object):
                     manifest = Manifest(path_name, self.__git_credentials)
                     manifest.update_manifest(self.__repo, self.__branch, self.__commit)
                     if manifest.changed:
-                        manifest.write_manifest_file(dir_name, commit_message, path_name, self.__dryrun)
+                        manifest.write_manifest_file(path_name, self.__dryrun)
                         return path_name, manifest
                     else:
                         print "No changes to {0}".format(manifest.name)
@@ -283,7 +301,7 @@ class UpdateManifest(object):
                         manifest = Manifest(path_name, self.__git_credentials)
                         manifest.update_manifest(self.__repo, self.__branch, self.__commit)
                         if manifest.changed:
-                            manifest.write_manifest_file(dir_name, commit_message, path_name, self.__dryrun)
+                            manifest.write_manifest_file(path_name, self.__dryrun)
                             return path_name, manifest
                         else:
                             print "No changes to {0}".format(manifest.name)
@@ -318,7 +336,7 @@ class UpdateManifest(object):
                 print "Unable to write parameter(s) for next step(s), exit"
                 self.cleanup_and_exit(error, 1)
 
-    def downstream_manifest_to_use(self, manifest_folder, file_with_path, manifest):
+    def downstream_manifest_to_use(self, manifest_folder, file_with_path, manifest, validate_result):
         """
         Write file which contains the name of the manifest file most recently updated.
         :param manifest_folder: the path of the manifest repository
@@ -327,36 +345,13 @@ class UpdateManifest(object):
         """
         file_name = file_with_path.split('/')[-1]
         downstream_parameters = {}
+        # If not validate_result, do not trigger downstream job
+        downstream_parameters['MANIFEST_FILE_VALID'] = validate_result
         downstream_parameters['MANIFEST_FILE_NAME'] = file_name
         downstream_parameters['BUILD_REQUIREMENTS'] = manifest.build_requirements
-        downstream_parameters['MANIFEST_FILE_REPO'] = self.__manifest_repository_url
-        try:
-            downstream_parameters['MANIFEST_FILE_BRANCH'] = self.repo_operator.get_current_branch(manifest_folder)
-            downstream_parameters['MANIFEST_FILE_COMMIT'] = self.repo_operator.get_lastest_commit_id(manifest_folder)
-        except RuntimeError as error:
-            self.cleanup_and_exit(error, 1)       
-        
-        self.write_downstream_parameters(self.__updated_manifest, downstream_parameters)
-        return
+        downstream_parameters['MANIFEST_FILE_URL'] = "/".join([self.__manifest_download_url, file_name])
 
-    def create_inject_properties_file(self):
-        """
-        Create inject.properties file for env vars injection after excute shell. 
-        If upstream_manifest_name exists then copy it to inject.properties, else 
-        create an empty inject.properties file to avoid exceptions throw by plugin.
-        """
-        if os.path.isfile(self.__updated_manifest):
-            try:
-                shutil.copyfile(self.__updated_manifest, "inject.properties")
-            except IOError as error:
-                print "ERROR: copy file {0} to inject.properties error.\n{1}".format(self.__updated_manifest, error)
-                sys.exit(1)
-        else:
-            try:
-                open('inject.properties','a').close()
-            except IOError as error:
-                print "ERROR: create empty file inject.properties error.\n{0}".format(error)
-                sys.exit(1)
+        self.write_downstream_parameters(self.__updated_manifest, downstream_parameters)
         return
 
 def split_args(args):
@@ -403,36 +398,36 @@ def split_args(args):
         args_list.append(tmp_args)
     return args_list
 
+def validate_manifest(update, manifest_folder):
+    print "Starting validate manifest files in manifest repository"
+    validate_result = True
+    for filename in os.listdir(manifest_folder):
+        pathname = os.path.join(manifest_folder, filename)
+        if os.path.isfile(pathname):
+            if not update.validate_manifest_files(pathname):
+                validate_result = False
+    return validate_result
+
 def main():
     args_list = split_args(sys.argv[1:])
     update = UpdateManifest()
-    
+
     for args in args_list:
         passed_args = update.parse_args(args)
         update.assign_args(passed_args)
         update.check_args()
 
-        manifest_folder = update.clone_manifest_repo()
-        
-        print "Starting validate manifest files in manifest repository"
-        validate_result = True
-        for filename in os.listdir(manifest_folder):
-            pathname = os.path.join(manifest_folder, filename)
-            if os.path.isfile(pathname):
-                if not update.validate_manifest_files(pathname):
-                    validate_result = False
-        if not validate_result:
-            update.cleanup_and_exit("Failed to validate manifest files in folder {0}".format(manifest_folder), 1)
+        manifest_folder = update.download_manifest_file()
 
         commit_message = update.get_updated_commit_message()
         update_filename, manifest = update.update_manifest_repo(manifest_folder, commit_message)
-    
+
+        validate_result = validate_manifest(update, manifest_folder)
+
         if update_filename is not None:
-            update.downstream_manifest_to_use(manifest_folder, update_filename, manifest)
-            update.create_inject_properties_file()
+            update.downstream_manifest_to_use(manifest_folder, update_filename, manifest, validate_result)
 
     update.cleanup_and_exit()
-
 
 if __name__ == "__main__":
     main()

@@ -13,7 +13,7 @@ class RepoCloner(ParallelTasks):
     given in the manifest file.
     Usage:
     cloner = RepoCloner(integer)
-    # the cloner could add several tasks 
+    # the cloner could add several tasks
     cloner.add_task(data)
     # data should contain:
       'repo': {
@@ -108,7 +108,7 @@ class RepoCloner(ParallelTasks):
         results['commands'] = []
         commands = results['commands']
         git = GitBit(verbose=False)
-        if 'credentials' in data:
+        if 'credentials' in data and data['credentials'] is not None:
             for credential in data['credentials']:
                 url, cred = credential.split(',', 2)
                 git.add_credential_from_variable(url, cred)
