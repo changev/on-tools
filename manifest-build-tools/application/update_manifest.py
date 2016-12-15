@@ -10,7 +10,7 @@ Usage:
 --commit "$id" \
 --manifest_download_url https://dl.bintray.com/rackhd-mirror/binary/manifest/ \
 --git-credential https://github.com,GITHUB_CREDS \
---manifest-file 1.2.3.file
+--manifest-file 1.2.3
 
 The required parameters:
 repo: Git url to match for updating the commit-id
