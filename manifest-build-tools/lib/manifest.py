@@ -74,11 +74,14 @@ class Manifest(object):
     def build_name(self):
         return self._build_name
 
+<<<<<<< HEAD
     @build_name.setter
     def build_name(self, build_name):
         self._build_name = build_name
         self._manifest['build-name'] = build_name
 
+=======
+>>>>>>> upstream/master
     @property
     def build_requirements(self):
         return self._build_requirements
@@ -88,10 +91,13 @@ class Manifest(object):
         self._manifest['build-requirements'] = requirements
         self._build_requirements = requirements
 
+<<<<<<< HEAD
     @property
     def changed(self):
         return self._changed
 
+=======
+>>>>>>> upstream/master
     def setup_gitbit(self):
         """
         Set gitbit credentials.
